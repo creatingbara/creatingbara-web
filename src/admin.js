@@ -97,8 +97,8 @@ export function panelPage(username) {
 <div id="msg" class="msg"></div>
 
 <section class="card tabpane" data-pane="contenido">
-<h2>Contenido del inicio</h2>
-<p class="muted">Edita los textos de la página de inicio. Al guardar, los cambios se publican de inmediato.</p>
+<h2>Contenido del sitio</h2>
+<p class="muted">Edita los textos de inicio, servicios y nosotros. Los bloques "Compartido" aparecen en varias páginas. Al guardar, los cambios se publican de inmediato.</p>
 <form id="contentForm"><div id="contentFields">Cargando…</div>
 <button class="btn" type="submit" style="margin-top:18px">Guardar cambios</button></form>
 </section>
