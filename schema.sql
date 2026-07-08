@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS posts (
   description TEXT NOT NULL DEFAULT '',
   category    TEXT NOT NULL DEFAULT '',
   minutes     INTEGER NOT NULL DEFAULT 3,
+  date_label  TEXT NOT NULL DEFAULT '',
   body_html   TEXT NOT NULL DEFAULT '',
   published   INTEGER NOT NULL DEFAULT 1,       -- 0 = borrador
   created_at  INTEGER NOT NULL DEFAULT (unixepoch()),

@@ -90,6 +90,7 @@ export function panelPage(username) {
 
 <div class="tabs">
 <button class="tab active" data-tab="contenido">Contenido</button>
+<button class="tab" data-tab="blog">Blog</button>
 <button class="tab" data-tab="contacto">Contacto</button>
 <button class="tab" data-tab="seguridad">Seguridad</button>
 </div>
@@ -101,6 +102,39 @@ export function panelPage(username) {
 <p class="muted">Edita los textos de inicio, servicios y nosotros. Los bloques "Compartido" aparecen en varias páginas. Al guardar, los cambios se publican de inmediato.</p>
 <form id="contentForm"><div id="contentFields">Cargando…</div>
 <button class="btn" type="submit" style="margin-top:18px">Guardar cambios</button></form>
+</section>
+
+<section class="card tabpane" data-pane="blog" hidden>
+<div class="row"><h2>Blog</h2><button class="btn" id="newPost">+ Nuevo artículo</button></div>
+<p class="muted">Crea, edita o borra artículos. Se publican en creatingbara.com/blog/.</p>
+<div id="postList">Cargando…</div>
+
+<div id="postEditor" hidden>
+<div class="divider" style="height:1px;background:var(--line);margin:18px 0"></div>
+<h3 id="postEditorTitle">Nuevo artículo</h3>
+<form id="postForm">
+<input type="hidden" name="id">
+<label for="pt">Título</label>
+<input id="pt" name="title" required>
+<div class="grid2">
+<div><label for="pcat">Categoría</label><input id="pcat" name="category" placeholder="Redes, Branding…"></div>
+<div><label for="pmin">Minutos de lectura</label><input id="pmin" name="minutes" type="number" min="1" value="3"></div>
+<div><label for="pdate">Fecha (texto)</label><input id="pdate" name="date_label" placeholder="16 jun 2026"></div>
+<div><label for="pslug">Enlace (slug) — opcional</label><input id="pslug" name="slug" placeholder="se genera del título"></div>
+</div>
+<label for="pdesc">Descripción corta (para tarjetas y buscadores)</label>
+<textarea id="pdesc" name="description"></textarea>
+<label for="pbody">Contenido del artículo (HTML)</label>
+<textarea id="pbody" name="body_html" style="min-height:260px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.9rem"></textarea>
+<p class="muted">Usa etiquetas simples: &lt;p&gt;párrafo&lt;/p&gt;, &lt;h2&gt;subtítulo&lt;/h2&gt;, &lt;ul&gt;&lt;li&gt;lista&lt;/li&gt;&lt;/ul&gt;, &lt;strong&gt;negrita&lt;/strong&gt;. Para empezar el artículo: &lt;p class="intro"&gt;…&lt;/p&gt;</p>
+<label style="display:flex;align-items:center;gap:8px;font-weight:600"><input type="checkbox" name="published" checked style="width:auto"> Publicado (visible en el sitio)</label>
+<div class="row" style="margin-top:16px;justify-content:flex-start;gap:10px">
+<button class="btn" type="submit">Guardar artículo</button>
+<button class="btn ghost" type="button" id="cancelPost">Cancelar</button>
+<button class="btn ghost" type="button" id="deletePost" style="margin-left:auto;color:#b23a25;border-color:#f3c6bd">Borrar</button>
+</div>
+</form>
+</div>
 </section>
 
 <section class="card tabpane" data-pane="contacto" hidden>
@@ -209,8 +243,59 @@ document.getElementById('contentForm').addEventListener('submit',async e=>{
   const d=await r.json();
   show(r.ok&&d.ok?'Cambios guardados y publicados en el sitio.':(d.error||'No se pudo guardar.'),r.ok&&d.ok);
 });
+// ---- blog ----
+const postList=document.getElementById('postList');
+const postEditor=document.getElementById('postEditor');
+const postForm=document.getElementById('postForm');
+async function loadPosts(){
+  try{
+    const d=await (await fetch('/api/posts')).json();
+    const posts=d.posts||[];
+    if(!posts.length){postList.innerHTML='<p class="muted">Aún no hay artículos.</p>';return;}
+    postList.innerHTML=posts.map(p=>
+      '<div class="row" style="padding:12px 0;border-bottom:1px solid var(--line)">'
+      +'<div><strong>'+esc(p.title)+'</strong>'+(p.published?'':' <span class="muted">(borrador)</span>')
+      +'<br><span class="muted">'+esc(p.category||'')+' · '+esc(p.date_label||'')+' · /blog/'+esc(p.slug)+'.html</span></div>'
+      +'<button class="btn ghost editPost" data-id="'+p.id+'">Editar</button></div>'
+    ).join('');
+    document.querySelectorAll('.editPost').forEach(b=>b.addEventListener('click',()=>openPost(b.dataset.id)));
+  }catch(_){postList.textContent='No se pudo cargar el blog.';}
+}
+function fillForm(p){
+  postForm.id.value=p.id||'';postForm.title.value=p.title||'';postForm.category.value=p.category||'';
+  postForm.minutes.value=p.minutes||3;postForm.date_label.value=p.date_label||'';postForm.slug.value=p.slug||'';
+  postForm.description.value=p.description||'';postForm.body_html.value=p.body_html||'';
+  postForm.published.checked=p.published!==0;
+  document.getElementById('deletePost').style.display=p.id?'':'none';
+}
+function showEditor(title){document.getElementById('postEditorTitle').textContent=title;postEditor.hidden=false;postEditor.scrollIntoView({behavior:'smooth'});}
+document.getElementById('newPost').addEventListener('click',()=>{fillForm({minutes:3,published:1});showEditor('Nuevo artículo');});
+document.getElementById('cancelPost').addEventListener('click',()=>{postEditor.hidden=true;});
+async function openPost(id){
+  const d=await (await fetch('/api/posts?id='+id)).json();
+  if(d.ok){fillForm(d.post);showEditor('Editar artículo');}
+}
+postForm.addEventListener('submit',async e=>{
+  e.preventDefault();
+  const b={id:postForm.id.value||null,title:postForm.title.value,category:postForm.category.value,
+    minutes:postForm.minutes.value,date_label:postForm.date_label.value,slug:postForm.slug.value,
+    description:postForm.description.value,body_html:postForm.body_html.value,published:postForm.published.checked};
+  const r=await fetch('/api/posts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+  const d=await r.json();
+  if(r.ok&&d.ok){show('Artículo guardado.',true);postEditor.hidden=true;loadPosts();}
+  else show(d.error||'No se pudo guardar.',false);
+});
+document.getElementById('deletePost').addEventListener('click',async()=>{
+  const id=postForm.id.value;if(!id)return;
+  if(!confirm('¿Borrar este artículo? No se puede deshacer.'))return;
+  const r=await fetch('/api/posts/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});
+  const d=await r.json();
+  if(r.ok&&d.ok){show('Artículo borrado.',true);postEditor.hidden=true;loadPosts();}
+  else show(d.error||'No se pudo borrar.',false);
+});
 loadContentEditor();
 loadContact();
+loadPosts();
 </script></body></html>`;
 }
 
