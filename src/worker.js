@@ -9,6 +9,9 @@ import {
 } from './auth.js';
 import { getAdminUser, setAdminPassword, getContentByPrefix, getAllContent, setContentBatch } from './db.js';
 import { loginPage, panelPage } from './admin.js';
+import { CONTENT_SCHEMA, VALID_KEYS } from './content-schema.js';
+
+const CONTACT_KEYS = new Set(['contact.whatsapp', 'contact.instagram', 'contact.facebook', 'contact.email']);
 
 const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
 const json = (obj, status = 200, extra = {}) =>
@@ -80,6 +83,11 @@ async function handleApi(request, env, url, path) {
   const session = await requireSession(request, env);
   if (!session) return json({ ok: false, error: 'No autorizado.' }, 401);
 
+  // GET /api/schema  -> estructura de campos editables (con textos por defecto)
+  if (path === '/api/schema' && request.method === 'GET') {
+    return json({ ok: true, schema: CONTENT_SCHEMA });
+  }
+
   // GET /api/content?prefix=contact.
   if (path === '/api/content' && request.method === 'GET') {
     const prefix = url.searchParams.get('prefix') || '';
@@ -96,7 +104,13 @@ async function handleApi(request, env, url, path) {
   if (path === '/api/content' && request.method === 'POST') {
     const { entries } = await request.json().catch(() => ({}));
     if (!entries || typeof entries !== 'object') return json({ ok: false, error: 'Datos inválidos.' }, 400);
-    await setContentBatch(env.DB, entries);
+    // Solo aceptar claves conocidas (contenido del esquema o datos de contacto).
+    const clean = {};
+    for (const [k, v] of Object.entries(entries)) {
+      if ((VALID_KEYS.has(k) || CONTACT_KEYS.has(k)) && typeof v === 'string') clean[k] = v;
+    }
+    if (!Object.keys(clean).length) return json({ ok: false, error: 'Sin campos válidos.' }, 400);
+    await setContentBatch(env.DB, clean);
     return json({ ok: true });
   }
 
@@ -136,24 +150,31 @@ async function servePublic(request, env, ctx) {
   const type = res.headers.get('Content-Type') || '';
   if (!type.includes('text/html')) return res;
 
-  // Inyectar CONFIG de contacto (y, en fases siguientes, más contenido).
-  let config = {};
-  try {
-    const c = await getContentByPrefix(env.DB, 'contact.');
-    config = {
-      whatsapp: c['contact.whatsapp'],
-      instagram: c['contact.instagram'],
-      facebook: c['contact.facebook'],
-      email: c['contact.email'],
-    };
-    // quitar indefinidos para no pisar los valores por defecto de app.js
-    Object.keys(config).forEach(k => config[k] == null && delete config[k]);
-  } catch { config = {}; }
+  // Cargar todo el contenido editable una sola vez.
+  let content = {};
+  try { content = await getAllContent(env.DB); } catch { content = {}; }
 
+  // CONFIG de contacto (los valores vacíos/ausentes no pisan los por defecto de app.js).
+  const config = {};
+  for (const k of ['whatsapp', 'instagram', 'facebook', 'email']) {
+    const v = content['contact.' + k];
+    if (v != null && v !== '') config[k] = v;
+  }
   const inject = `<script>window.CMS_CONFIG=${JSON.stringify(config)};</script>`;
+
   return new HTMLRewriter()
     .on('head', {
       element(el) { el.append(inject, { html: true }); },
+    })
+    .on('[data-cms]', {
+      element(el) {
+        const key = el.getAttribute('data-cms');
+        if (!key || !(key in content)) return;
+        const val = content[key];
+        if (val == null) return;
+        if (el.tagName === 'img') el.setAttribute('src', val);
+        else el.setInnerContent(val); // texto (se escapa automáticamente)
+      },
     })
     .transform(res);
 }

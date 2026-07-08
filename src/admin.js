@@ -89,13 +89,21 @@ export function panelPage(username) {
 <button class="btn ghost" id="logout">Salir</button></div></div>
 
 <div class="tabs">
-<button class="tab active" data-tab="contacto">Contacto</button>
+<button class="tab active" data-tab="contenido">Contenido</button>
+<button class="tab" data-tab="contacto">Contacto</button>
 <button class="tab" data-tab="seguridad">Seguridad</button>
 </div>
 
 <div id="msg" class="msg"></div>
 
-<section class="card tabpane" data-pane="contacto">
+<section class="card tabpane" data-pane="contenido">
+<h2>Contenido del inicio</h2>
+<p class="muted">Edita los textos de la página de inicio. Al guardar, los cambios se publican de inmediato.</p>
+<form id="contentForm"><div id="contentFields">Cargando…</div>
+<button class="btn" type="submit" style="margin-top:18px">Guardar cambios</button></form>
+</section>
+
+<section class="card tabpane" data-pane="contacto" hidden>
 <h2>Datos de contacto</h2>
 <p class="muted">Estos valores alimentan todos los botones de WhatsApp, redes y correo del sitio.</p>
 <form id="contactForm">
@@ -171,6 +179,37 @@ document.getElementById('pwForm').addEventListener('submit',async e=>{
   show(r.ok&&d.ok?'Contraseña actualizada.':(d.error||'No se pudo actualizar.'),r.ok&&d.ok);
   if(r.ok&&d.ok)f.reset();
 });
+// editor de contenido (textos del inicio)
+const fieldsBox=document.getElementById('contentFields');
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+async function loadContentEditor(){
+  try{
+    const [rs,rc]=await Promise.all([fetch('/api/schema'),fetch('/api/content')]);
+    const {schema}=await rs.json();const {content}=await rc.json();
+    let html='';
+    for(const g of schema){
+      html+='<h3 style="margin:22px 0 4px">'+esc(g.group)+'</h3>';
+      for(const f of g.fields){
+        const val=(content&&content[f.key]!=null)?content[f.key]:f.default;
+        const id='cf_'+f.key.replace(/[^a-z0-9]/gi,'_');
+        html+='<label for="'+id+'">'+esc(f.label)+'</label>';
+        html+=f.type==='textarea'
+          ?'<textarea id="'+id+'" name="'+esc(f.key)+'">'+esc(val)+'</textarea>'
+          :'<input id="'+id+'" name="'+esc(f.key)+'" value="'+esc(val)+'">';
+      }
+    }
+    fieldsBox.innerHTML=html;
+  }catch(_){fieldsBox.textContent='No se pudo cargar el contenido.';}
+}
+document.getElementById('contentForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const fd=new FormData(e.target),entries={};
+  for(const[k,v]of fd.entries())entries[k]=v;
+  const r=await fetch('/api/content',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({entries})});
+  const d=await r.json();
+  show(r.ok&&d.ok?'Cambios guardados y publicados en el sitio.':(d.error||'No se pudo guardar.'),r.ok&&d.ok);
+});
+loadContentEditor();
 loadContact();
 </script></body></html>`;
 }
