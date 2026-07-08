@@ -1,0 +1,4 @@
+# Copia este archivo como .dev.vars para desarrollo local (no se sube al repo).
+SESSION_SECRET="cadena-larga-y-aleatoria-solo-para-desarrollo"
+# Opcional: si defines TURNSTILE_SECRET, el login local exigirá captcha.
+# TURNSTILE_SECRET=""

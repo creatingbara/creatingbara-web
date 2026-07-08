@@ -1,5 +1,5 @@
 
-const CONFIG={whatsapp:"18090000000",instagram:"creatingbara",facebook:"creatingbara",email:"hola@creatingbara.com"};
+const CONFIG=Object.assign({whatsapp:"18090000000",instagram:"creatingbara",facebook:"creatingbara",email:"hola@creatingbara.com"},(typeof window!=="undefined"&&window.CMS_CONFIG)||{});
 const wa=m=>`https://wa.me/${CONFIG.whatsapp}?text=${encodeURIComponent(m)}`;
 const L=document.documentElement.lang==="en";
 document.querySelectorAll('.js-wa').forEach(a=>a.href=wa(L?"Hi Creating Bara 👋 I'd like to know more about your services.":"Hola Creating Bara 👋 Quiero información sobre sus servicios."));

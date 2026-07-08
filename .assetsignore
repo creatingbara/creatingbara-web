@@ -1,8 +1,14 @@
 .git
 node_modules
+src
+scripts
+schema.sql
+package.json
+package-lock.json
 wrangler.jsonc
 .assetsignore
 .gitignore
+.dev.vars
 README.md
 CLAUDE.md
 AGENTS.md
