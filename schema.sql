@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS admin_user (
   username   TEXT NOT NULL,
   salt       TEXT NOT NULL,
   hash       TEXT NOT NULL,
-  iterations INTEGER NOT NULL DEFAULT 210000,
+  iterations INTEGER NOT NULL DEFAULT 100000,
   updated_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
 

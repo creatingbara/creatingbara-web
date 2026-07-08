@@ -7,7 +7,7 @@
 
 import { writeFileSync } from 'node:fs';
 
-const ITERATIONS = 210000;
+const ITERATIONS = 100000; // máximo permitido por el runtime de Cloudflare Workers
 const [username, password] = process.argv.slice(2);
 
 if (!username || !password) {

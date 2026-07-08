@@ -29,7 +29,8 @@ function timingSafeEqual(a, b) {
 }
 
 // ---------- contraseña (PBKDF2-SHA256) ----------
-export async function hashPassword(password, saltHex, iterations = 210000) {
+// El runtime de Cloudflare Workers limita PBKDF2 a 100000 iteraciones (máximo permitido).
+export async function hashPassword(password, saltHex, iterations = 100000) {
   const salt = saltHex ? hexToBuf(saltHex) : crypto.getRandomValues(new Uint8Array(16)).buffer;
   const key = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
   const bits = await crypto.subtle.deriveBits(

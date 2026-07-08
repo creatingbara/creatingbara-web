@@ -14,15 +14,11 @@
     {
       "binding": "DB",
       "database_name": "creatingbara",
-      "database_id": "REEMPLAZAR_CON_ID_DE_D1"
+      "database_id": "ce84a364-3de4-4d90-bb4e-1481e816a05a"
     }
   ],
-  "r2_buckets": [
-    {
-      "binding": "MEDIA",
-      "bucket_name": "creatingbara-media"
-    }
-  ],
+  // R2 (imágenes) se activa en la Fase 2: habilitar R2 en el dashboard, crear el
+  // bucket "creatingbara-media" y volver a añadir aquí el binding MEDIA.
   "vars": {
     "TURNSTILE_SITEKEY": ""
   }
