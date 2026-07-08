@@ -23,10 +23,13 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
+    // Subdominio dedicado al panel: todo sirve el panel/API, nunca el sitio público.
+    const isAdminHost = url.hostname === (env.ADMIN_HOST || 'admin.creatingbara.com');
     try {
       if (path === '/api/login') return handleLogin(request, env, url);
       if (path === '/api/logout') return handleLogout();
       if (path.startsWith('/api/')) return handleApi(request, env, url, path);
+      if (isAdminHost) return serveAdmin(request, env);
       if (path === '/admin' || path === '/admin/') return serveAdmin(request, env);
       if (path === '/blog' || path === '/blog/') return serveBlogIndex(request, env);
       const artMatch = path.match(/^\/blog\/([a-z0-9-]+)\.html$/i);

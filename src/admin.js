@@ -85,7 +85,7 @@ export function panelPage(username) {
 <div class="topbar"><div class="brand">Creating Bara</div>
 <div class="row" style="gap:10px">
 <span class="muted">Hola, ${escapeHtml(username)}</span>
-<a class="btn ghost" href="/" target="_blank" rel="noopener">Ver sitio ↗</a>
+<a class="btn ghost" href="https://creatingbara.com/" target="_blank" rel="noopener">Ver sitio ↗</a>
 <button class="btn ghost" id="logout">Salir</button></div></div>
 
 <div class="tabs">

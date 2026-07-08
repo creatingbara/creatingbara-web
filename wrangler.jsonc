@@ -3,6 +3,12 @@
   "name": "creatingbara-web",
   "main": "src/worker.js",
   "compatibility_date": "2025-07-08",
+  "workers_dev": true,
+  "routes": [
+    { "pattern": "creatingbara.com", "custom_domain": true },
+    { "pattern": "www.creatingbara.com", "custom_domain": true },
+    { "pattern": "admin.creatingbara.com", "custom_domain": true }
+  ],
   "assets": {
     "directory": "./",
     "binding": "ASSETS",
