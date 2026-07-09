@@ -73,6 +73,60 @@ export async function upsertPost(db, p) {
   return r.meta.last_row_id;
 }
 
+// ---------- reservas de la demo "Web + Agenda 24/7" ----------
+export async function getBookedSlots(db, date) {
+  const { results } = await db.prepare(
+    `SELECT time_label FROM demo_bookings WHERE booking_date = ? AND status = 'confirmed'`
+  ).bind(date).all();
+  return results.map(r => r.time_label);
+}
+
+export async function createBooking(db, b) {
+  try {
+    const r = await db.prepare(
+      `INSERT INTO demo_bookings (booking_date, time_label, starts_at, name, phone)
+       VALUES (?, ?, ?, ?, ?)`
+    ).bind(b.booking_date, b.time_label, b.starts_at, b.name, b.phone).run();
+    return { id: r.meta.last_row_id, conflict: false };
+  } catch (err) {
+    if (String(err.message || err).includes('UNIQUE')) return { id: null, conflict: true };
+    throw err;
+  }
+}
+
+export async function markBookingSent(db, id, field) {
+  const col = field === 'reminder' ? 'reminder_sent' : 'confirmation_sent';
+  await db.prepare(`UPDATE demo_bookings SET ${col} = 1 WHERE id = ?`).bind(id).run();
+}
+
+export async function setBookingCrmContact(db, id, contactId) {
+  await db.prepare('UPDATE demo_bookings SET crm_contact_id = ? WHERE id = ?').bind(contactId, id).run();
+}
+
+export async function getBookingsDueForReminder(db, fromTs, toTs) {
+  const { results } = await db.prepare(
+    `SELECT * FROM demo_bookings WHERE status = 'confirmed' AND reminder_sent = 0
+     AND starts_at >= ? AND starts_at <= ?`
+  ).bind(fromTs, toTs).all();
+  return results;
+}
+
+// ---------- rate limiting de reservas de la demo ----------
+export async function isDemoBookingRateLimited(db, ip, { windowSec = 600, maxAttempts = 3 } = {}) {
+  const since = Math.floor(Date.now() / 1000) - windowSec;
+  const row = await db.prepare(
+    'SELECT COUNT(*) AS n FROM demo_booking_attempts WHERE ip = ? AND ts >= ?'
+  ).bind(ip, since).first();
+  return (row?.n || 0) >= maxAttempts;
+}
+
+export async function recordDemoBookingAttempt(db, ip) {
+  await db.prepare('INSERT INTO demo_booking_attempts (ip, ts) VALUES (?, ?)')
+    .bind(ip, Math.floor(Date.now() / 1000)).run();
+  const cutoff = Math.floor(Date.now() / 1000) - 86400;
+  await db.prepare('DELETE FROM demo_booking_attempts WHERE ts < ?').bind(cutoff).run();
+}
+
 export async function setContentBatch(db, entries) {
   const stmt = db.prepare(
     `INSERT INTO content (key, value, updated_at) VALUES (?, ?, unixepoch())

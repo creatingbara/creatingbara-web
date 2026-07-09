@@ -63,6 +63,11 @@ header{padding:18px 0}
 .slots{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:16px}
 .slot{padding:8px 4px;border-radius:9px;border:1px solid var(--linea);font-size:.74rem;font-weight:700;text-align:center;cursor:pointer;background:var(--blanco)}
 .slot.selected{background:var(--terra);color:#fff;border-color:var(--terra)}
+.slot.disabled{color:var(--linea);border-color:transparent;cursor:not-allowed;text-decoration:line-through;background:var(--crema)}
+.contact-step label{font-size:.72rem;font-weight:800;color:var(--gris);display:block;margin:0 0 4px}
+.contact-step input{width:100%;padding:9px 10px;border:1px solid var(--linea);border-radius:9px;font:inherit;font-size:.82rem;margin-bottom:8px;background:var(--blanco);color:var(--ink)}
+.contact-step input:focus{outline:2px solid var(--terra);outline-offset:1px}
+.booking-error{color:#c0392b;font-size:.76rem;font-weight:700;margin-bottom:8px;display:none}
 .confirm-btn{width:100%;background:var(--terra);color:#fff;border:0;border-radius:12px;padding:12px;font-weight:800;font-family:var(--body);cursor:pointer;font-size:.9rem}
 .confirm-btn:disabled{background:var(--linea);color:var(--gris);cursor:not-allowed}
 .success{display:none;text-align:center;padding:26px 6px}
@@ -134,11 +139,18 @@ footer a{color:var(--terra-dk);font-weight:700;text-decoration:none}
 <div class="cal-grid" id="calDays"></div>
 <div class="slots-label">Horarios disponibles</div>
 <div class="slots" id="slots"></div>
+<div class="contact-step" id="contactStep" hidden>
+<label for="custName">Tu nombre</label>
+<input type="text" id="custName" placeholder="Nombre y apellido" autocomplete="name">
+<label for="custPhone">Tu WhatsApp</label>
+<input type="tel" id="custPhone" placeholder="+1 809 555 1234" autocomplete="tel">
+</div>
+<div class="booking-error" id="bookingError"></div>
 <button class="confirm-btn" id="confirmBtn" disabled>Selecciona fecha y hora</button>
 <div class="success" id="successPanel">
 <div class="check">✓</div>
 <h4>¡Cita confirmada!</h4>
-<p>Recordatorio automático por WhatsApp programado para 24h antes. Así de simple es para tus clientes.</p>
+<p id="successText">Recordatorio automático por WhatsApp programado para 24h antes. Así de simple es para tus clientes.</p>
 </div>
 </div>
 </div>
@@ -206,7 +218,7 @@ Página de demostración (los datos del calendario son ilustrativos) — hecha p
 
 <script src="/assets/app.js"></script>
 <script>
-// ---- calendario de demo (sin backend, solo ilustrativo) ----
+// ---- calendario de demo — reserva REAL (D1 + confirmación/recordatorio por WhatsApp) ----
 const MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 const DOW=['D','L','M','M','J','V','S'];
 const today=new Date();
@@ -218,7 +230,7 @@ DOW.forEach(d=>{const el=document.createElement('div');el.className='cal-dow';el
 const daysBox=document.getElementById('calDays');
 const firstDow=new Date(demoYear,demoMonth,1).getDay();
 const totalDays=new Date(demoYear,demoMonth+1,0).getDate();
-let selectedDay=null, selectedSlot=null;
+let selectedDay=null, selectedSlot=null, bookedSlots=[];
 for(let i=0;i<firstDow;i++){const e=document.createElement('div');daysBox.appendChild(e);}
 for(let d=1;d<=totalDays;d++){
   const el=document.createElement('div');el.className='cal-day';el.textContent=d;
@@ -227,11 +239,11 @@ for(let d=1;d<=totalDays;d++){
   const isWeekend=dow===0;
   if(isPast||isWeekend){el.classList.add('disabled');}
   else{
-    el.addEventListener('click',()=>{
+    el.addEventListener('click',async()=>{
       document.querySelectorAll('.cal-day.selected').forEach(x=>x.classList.remove('selected'));
       el.classList.add('selected'); selectedDay=d; selectedSlot=null;
       document.querySelectorAll('.slot.selected').forEach(x=>x.classList.remove('selected'));
-      updateBtn();
+      await loadAvailability();
     });
   }
   daysBox.appendChild(el);
@@ -241,19 +253,91 @@ const slotsBox=document.getElementById('slots');
 HOURS.forEach(h=>{
   const el=document.createElement('div');el.className='slot';el.textContent=h;
   el.addEventListener('click',()=>{
+    if(el.classList.contains('disabled'))return;
     document.querySelectorAll('.slot.selected').forEach(x=>x.classList.remove('selected'));
     el.classList.add('selected'); selectedSlot=h; updateBtn();
   });
   slotsBox.appendChild(el);
 });
-const btn=document.getElementById('confirmBtn');
-function updateBtn(){
-  if(selectedDay&&selectedSlot){btn.disabled=false;btn.textContent='Confirmar cita · '+selectedDay+' '+MESES[demoMonth].slice(0,3)+', '+selectedSlot;}
-  else{btn.disabled=true;btn.textContent='Selecciona fecha y hora';}
+
+function isoDate(){return demoYear+'-'+String(demoMonth+1).padStart(2,'0')+'-'+String(selectedDay).padStart(2,'0');}
+
+async function loadAvailability(){
+  if(!selectedDay)return;
+  try{
+    const r=await fetch('/api/demo-agenda/availability?date='+isoDate());
+    const d=await r.json();
+    bookedSlots=(r.ok&&d.ok)?d.booked:[];
+  }catch(_){bookedSlots=[];}
+  document.querySelectorAll('.slot').forEach(el=>{
+    const taken=bookedSlots.includes(el.textContent);
+    el.classList.toggle('disabled',taken);
+    if(taken&&el.classList.contains('selected')){el.classList.remove('selected');selectedSlot=null;}
+  });
+  updateBtn();
 }
-btn.addEventListener('click',()=>{
-  document.querySelector('.phone-screen > .cal-head').parentElement.querySelectorAll(':scope > *:not(.success)').forEach(el=>el.style.display='none');
-  document.getElementById('successPanel').style.display='block';
+
+const btn=document.getElementById('confirmBtn');
+const contactStep=document.getElementById('contactStep');
+const custName=document.getElementById('custName');
+const custPhone=document.getElementById('custPhone');
+const bookingError=document.getElementById('bookingError');
+
+function normalizePhone(v){
+  let s=(v||'').replace(/[^\d+]/g,'');
+  if(!s.startsWith('+')){
+    if(s.length===10)s='+1'+s;
+    else if(s.length===11&&s.startsWith('1'))s='+'+s;
+    else s='+'+s;
+  }
+  return s;
+}
+function updateBtn(){
+  if(selectedDay&&selectedSlot){
+    contactStep.hidden=false;
+    const nameOk=custName.value.trim().length>0;
+    const phoneOk=/^\+[1-9]\d{7,14}$/.test(normalizePhone(custPhone.value));
+    if(nameOk&&phoneOk){
+      btn.disabled=false;
+      btn.textContent='Confirmar cita · '+selectedDay+' '+MESES[demoMonth].slice(0,3)+', '+selectedSlot;
+    }else{
+      btn.disabled=true;
+      btn.textContent='Completa tus datos';
+    }
+  }else{
+    contactStep.hidden=true;
+    btn.disabled=true;
+    btn.textContent='Selecciona fecha y hora';
+  }
+}
+custName.addEventListener('input',updateBtn);
+custPhone.addEventListener('input',updateBtn);
+
+btn.addEventListener('click',async()=>{
+  bookingError.style.display='none';
+  const prevLabel=btn.textContent;
+  btn.disabled=true; btn.textContent='Reservando…';
+  try{
+    const r=await fetch('/api/demo-agenda/book',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({date:isoDate(),time:selectedSlot,name:custName.value.trim(),phone:normalizePhone(custPhone.value)})});
+    const d=await r.json();
+    if(r.ok&&d.ok){
+      document.getElementById('successText').textContent=d.whatsappSent
+        ? 'Te acabamos de enviar la confirmación por WhatsApp. Así de simple es para tus clientes.'
+        : 'Tu cita quedó guardada — es una reserva real. (El WhatsApp automático se activa en cuanto Meta apruebe la plantilla.)';
+      document.querySelector('.phone-screen').querySelectorAll(':scope > *:not(.success)').forEach(el=>el.style.display='none');
+      document.getElementById('successPanel').style.display='block';
+    }else{
+      bookingError.textContent=d.error||'No se pudo reservar. Intenta de nuevo.';
+      bookingError.style.display='block';
+      btn.disabled=false; btn.textContent=prevLabel;
+      if(r.status===409)await loadAvailability();
+    }
+  }catch(_){
+    bookingError.textContent='Error de red. Intenta de nuevo.';
+    bookingError.style.display='block';
+    btn.disabled=false; btn.textContent=prevLabel;
+  }
 });
 const yEl=document.getElementById('year'); if(yEl) yEl.textContent=new Date().getFullYear();
 </script>

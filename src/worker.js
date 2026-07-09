@@ -8,10 +8,17 @@ import {
   parseCookies, sessionCookie, clearSessionCookie,
 } from './auth.js';
 import { getAdminUser, setAdminPassword, getContentByPrefix, getAllContent, setContentBatch,
-  listPosts, getPost, getPostById, deletePost, upsertPost } from './db.js';
+  listPosts, getPost, getPostById, deletePost, upsertPost,
+  getBookedSlots, createBooking, markBookingSent, setBookingCrmContact, getBookingsDueForReminder,
+  isDemoBookingRateLimited, recordDemoBookingAttempt } from './db.js';
 import { loginPage, panelPage } from './admin.js';
 import { CONTENT_SCHEMA, VALID_KEYS } from './content-schema.js';
 import { renderArticle, renderIndex } from './blog-view.js';
+import { upsertCrmContact, sendCrmTemplateMessage } from './crm-client.js';
+
+const DEMO_HOURS = ['9:00 AM', '10:30 AM', '1:00 PM', '2:30 PM', '4:00 PM', '5:30 PM'];
+const DEMO_CONFIRM_TEMPLATE = 'demo_agenda_confirmacion';
+const DEMO_REMINDER_TEMPLATE = 'demo_agenda_recordatorio';
 
 const CONTACT_KEYS = new Set(['contact.whatsapp', 'contact.instagram', 'contact.facebook', 'contact.email']);
 
@@ -30,6 +37,8 @@ export default {
     try {
       if (path === '/api/login') return handleLogin(request, env, url);
       if (path === '/api/logout') return handleLogout();
+      if (path === '/api/demo-agenda/availability' && request.method === 'GET') return handleDemoAvailability(request, env, url);
+      if (path === '/api/demo-agenda/book' && request.method === 'POST') return handleDemoBook(request, env, url);
       if (path.startsWith('/api/')) return handleApi(request, env, url, path);
       if (path.startsWith('/media/')) return serveMedia(env, path.slice('/media/'.length));
       if (isDemoAgendaHost && !path.startsWith('/assets/') && !path.startsWith('/media/')) return serveDemoAgenda(request, env);
@@ -42,6 +51,11 @@ export default {
     } catch (err) {
       return json({ ok: false, error: 'Error interno.' }, 500);
     }
+  },
+
+  // Cron Trigger: envía el recordatorio de WhatsApp ~24h antes de cada cita de la demo.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(sendDueReminders(env));
   },
 };
 
@@ -295,6 +309,96 @@ async function serveDemoAgenda(request, env) {
   assetUrl.pathname = '/demo-agenda'; // ruta limpia: evita el 307 de auto-trailing-slash a .html
   const res = await env.ASSETS.fetch(new Request(assetUrl.toString(), request));
   return applyCms(res, env);
+}
+
+function timeLabelTo24h(label) {
+  const m = /^(\d{1,2}):(\d{2})\s?(AM|PM)$/i.exec(label || '');
+  if (!m) return null;
+  let h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  const ampm = m[3].toUpperCase();
+  if (ampm === 'PM' && h !== 12) h += 12;
+  if (ampm === 'AM' && h === 12) h = 0;
+  return { h, min };
+}
+// República Dominicana: UTC-4 todo el año (sin horario de verano) — se asume fija
+// para no depender de la zona horaria del navegador de quien reserva.
+function computeStartsAt(dateStr, timeLabel) {
+  const t = timeLabelTo24h(timeLabel);
+  if (!t) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr || '');
+  if (!m) return null;
+  return Math.floor(Date.UTC(+m[1], +m[2] - 1, +m[3], t.h + 4, t.min, 0) / 1000);
+}
+function isValidDateStr(s) { return /^\d{4}-\d{2}-\d{2}$/.test(s || ''); }
+
+async function handleDemoAvailability(request, env, url) {
+  const date = url.searchParams.get('date') || '';
+  if (!isValidDateStr(date)) return json({ ok: false, error: 'Fecha inválida.' }, 400);
+  const booked = await getBookedSlots(env.DB, date);
+  return json({ ok: true, booked });
+}
+
+async function handleDemoBook(request, env, url) {
+  if (!sameOrigin(request, url)) return json({ ok: false, error: 'Origen inválido.' }, 403);
+  const ip = clientIp(request);
+  if (await isDemoBookingRateLimited(env.DB, ip)) {
+    return json({ ok: false, error: 'Demasiados intentos. Espera unos minutos e intenta de nuevo.' }, 429);
+  }
+  await recordDemoBookingAttempt(env.DB, ip);
+
+  let body;
+  try { body = await request.json(); } catch { return json({ ok: false, error: 'Solicitud inválida.' }, 400); }
+  const date = String(body.date || '');
+  const timeLabel = String(body.time || '');
+  const name = String(body.name || '').trim().slice(0, 60);
+  const phone = String(body.phone || '').trim();
+
+  if (!isValidDateStr(date)) return json({ ok: false, error: 'Fecha inválida.' }, 400);
+  if (!DEMO_HOURS.includes(timeLabel)) return json({ ok: false, error: 'Horario inválido.' }, 400);
+  if (!name) return json({ ok: false, error: 'Falta el nombre.' }, 400);
+  if (!/^\+[1-9]\d{7,14}$/.test(phone)) return json({ ok: false, error: 'Número de WhatsApp inválido. Usa formato +18095551234.' }, 400);
+
+  const startsAt = computeStartsAt(date, timeLabel);
+  if (!startsAt) return json({ ok: false, error: 'Fecha/horario inválido.' }, 400);
+  const nowTs = Math.floor(Date.now() / 1000);
+  if (startsAt < nowTs + 3600) return json({ ok: false, error: 'Elige un horario con al menos 1 hora de anticipación.' }, 400);
+  const dow = new Date(startsAt * 1000).getUTCDay();
+  if (dow === 0) return json({ ok: false, error: 'No hay citas los domingos.' }, 400);
+
+  const { id, conflict } = await createBooking(env.DB, { booking_date: date, time_label: timeLabel, starts_at: startsAt, name, phone });
+  if (conflict) return json({ ok: false, error: 'Ese horario ya se reservó. Elige otro.' }, 409);
+
+  // Confirmación real por WhatsApp (best-effort: si la plantilla aún no está aprobada
+  // por Meta, la reserva sigue siendo válida — solo no se envía el mensaje todavía).
+  let whatsappSent = false;
+  try {
+    const contact = await upsertCrmContact(env, { phone, name });
+    if (contact.ok) {
+      await setBookingCrmContact(env.DB, id, contact.data.id);
+      const send = await sendCrmTemplateMessage(env, {
+        phone, templateName: DEMO_CONFIRM_TEMPLATE, params: [name, date, timeLabel],
+      });
+      if (send.ok) { whatsappSent = true; await markBookingSent(env.DB, id, 'confirmation'); }
+    }
+  } catch { /* best-effort */ }
+
+  return json({ ok: true, whatsappSent });
+}
+
+// ---------- recordatorio automático 24h antes (Cron Trigger) ----------
+async function sendDueReminders(env) {
+  const now = Math.floor(Date.now() / 1000);
+  const from = now + 23 * 3600, to = now + 25 * 3600; // ventana de ~1h alrededor de las 24h antes
+  const due = await getBookingsDueForReminder(env.DB, from, to);
+  for (const b of due) {
+    try {
+      const send = await sendCrmTemplateMessage(env, {
+        phone: b.phone, templateName: DEMO_REMINDER_TEMPLATE, params: [b.name, b.booking_date, b.time_label],
+      });
+      if (send.ok) await markBookingSent(env.DB, b.id, 'reminder');
+    } catch { /* best-effort, se reintenta en la próxima corrida */ }
+  }
 }
 
 // ---------- BLOG DINÁMICO ----------
