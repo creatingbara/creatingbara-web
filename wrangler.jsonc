@@ -7,7 +7,8 @@
   "routes": [
     { "pattern": "creatingbara.com", "custom_domain": true },
     { "pattern": "www.creatingbara.com", "custom_domain": true },
-    { "pattern": "admin.creatingbara.com", "custom_domain": true }
+    { "pattern": "admin.creatingbara.com", "custom_domain": true },
+    { "pattern": "demoagenda.creatingbara.com", "custom_domain": true }
   ],
   "assets": {
     "directory": "./",

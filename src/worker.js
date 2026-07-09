@@ -25,11 +25,14 @@ export default {
     const path = url.pathname;
     // Subdominio dedicado al panel: todo sirve el panel/API, nunca el sitio público.
     const isAdminHost = url.hostname === (env.ADMIN_HOST || 'admin.creatingbara.com');
+    // Subdominio de la demo "Web + Agenda 24/7": una sola página, en cualquier ruta.
+    const isDemoAgendaHost = url.hostname === (env.DEMO_AGENDA_HOST || 'demoagenda.creatingbara.com');
     try {
       if (path === '/api/login') return handleLogin(request, env, url);
       if (path === '/api/logout') return handleLogout();
       if (path.startsWith('/api/')) return handleApi(request, env, url, path);
       if (path.startsWith('/media/')) return serveMedia(env, path.slice('/media/'.length));
+      if (isDemoAgendaHost && !path.startsWith('/assets/') && !path.startsWith('/media/')) return serveDemoAgenda(request, env);
       if (isAdminHost) return serveAdmin(request, env);
       if (path === '/admin' || path === '/admin/') return serveAdmin(request, env);
       if (path === '/blog' || path === '/blog/') return serveBlogIndex(request, env);
@@ -283,6 +286,14 @@ async function servePublic(request, env, ctx) {
   const res = await env.ASSETS.fetch(request);
   const type = res.headers.get('Content-Type') || '';
   if (!type.includes('text/html')) return res;
+  return applyCms(res, env);
+}
+
+// ---------- DEMO "Web + Agenda 24/7" (página única) ----------
+async function serveDemoAgenda(request, env) {
+  const assetUrl = new URL(request.url);
+  assetUrl.pathname = '/demo-agenda'; // ruta limpia: evita el 307 de auto-trailing-slash a .html
+  const res = await env.ASSETS.fetch(new Request(assetUrl.toString(), request));
   return applyCms(res, env);
 }
 
