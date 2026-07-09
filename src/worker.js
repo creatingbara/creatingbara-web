@@ -29,6 +29,7 @@ export default {
       if (path === '/api/login') return handleLogin(request, env, url);
       if (path === '/api/logout') return handleLogout();
       if (path.startsWith('/api/')) return handleApi(request, env, url, path);
+      if (path.startsWith('/media/')) return serveMedia(env, path.slice('/media/'.length));
       if (isAdminHost) return serveAdmin(request, env);
       if (path === '/admin' || path === '/admin/') return serveAdmin(request, env);
       if (path === '/blog' || path === '/blog/') return serveBlogIndex(request, env);
@@ -181,7 +182,35 @@ async function handleApi(request, env, url, path) {
     return json({ ok: true });
   }
 
+  // POST /api/upload  -> sube una imagen a R2, devuelve su URL pública (/media/...)
+  if (path === '/api/upload' && request.method === 'POST') {
+    if (!env.MEDIA) return json({ ok: false, error: 'Almacenamiento de imágenes no configurado.' }, 500);
+    const contentType = request.headers.get('Content-Type') || '';
+    if (!contentType.includes('multipart/form-data')) return json({ ok: false, error: 'Formato inválido.' }, 400);
+    const form = await request.formData().catch(() => null);
+    const file = form && form.get('file');
+    if (!file || typeof file === 'string') return json({ ok: false, error: 'Falta el archivo.' }, 400);
+    if (!file.type || !file.type.startsWith('image/')) return json({ ok: false, error: 'Solo se permiten imágenes.' }, 400);
+    if (file.size > 5 * 1024 * 1024) return json({ ok: false, error: 'La imagen es muy grande (máx. 5 MB).' }, 400);
+    const ext = (file.type.split('/')[1] || 'bin').replace(/[^a-z0-9]/gi, '').slice(0, 10) || 'bin';
+    const key = `uploads/${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}.${ext}`;
+    await env.MEDIA.put(key, await file.arrayBuffer(), { httpMetadata: { contentType: file.type } });
+    return json({ ok: true, url: '/media/' + key });
+  }
+
   return json({ ok: false, error: 'No encontrado.' }, 404);
+}
+
+// ---------- IMÁGENES (R2) ----------
+async function serveMedia(env, key) {
+  if (!env.MEDIA || !key) return new Response('No encontrado.', { status: 404 });
+  const obj = await env.MEDIA.get(decodeURIComponent(key));
+  if (!obj) return new Response('No encontrado.', { status: 404 });
+  const headers = new Headers();
+  obj.writeHttpMetadata(headers);
+  headers.set('etag', obj.httpEtag);
+  headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+  return new Response(obj.body, { headers });
 }
 
 function slugify(s) {
@@ -228,6 +257,18 @@ async function applyCms(response, env) {
         if (val == null) return;
         if (el.tagName === 'img') el.setAttribute('src', val);
         else el.setInnerContent(val); // texto (se escapa automáticamente)
+      },
+    })
+    .on('[data-cms-bg]', {
+      element(el) {
+        const key = el.getAttribute('data-cms-bg');
+        if (!key || !content[key]) return; // sin override: se queda la imagen original
+        const style = el.getAttribute('style') || '';
+        const safeUrl = content[key].replace(/[()'"]/g, '');
+        const next = /background-image\s*:\s*url\([^)]*\)/.test(style)
+          ? style.replace(/background-image\s*:\s*url\([^)]*\)/, `background-image:url('${safeUrl}')`)
+          : `${style};background-image:url('${safeUrl}')`;
+        el.setAttribute('style', next);
       },
     })
     .transform(response);

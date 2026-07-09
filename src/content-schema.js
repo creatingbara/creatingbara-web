@@ -114,6 +114,26 @@ export const CONTENT_SCHEMA = [
   },
 
   {
+    group: 'Servicios · Tarjetas (imagen y texto)',
+    fields: [
+      { key: 'servicios.svc1.img', label: 'Web + Agenda 24/7 · Imagen', type: 'image', default: '' },
+      { key: 'servicios.svc1.title', label: 'Web + Agenda 24/7 · Título', type: 'text', default: 'Web + Agenda 24/7' },
+      { key: 'servicios.svc1.text', label: 'Web + Agenda 24/7 · Texto', type: 'textarea', default: 'Para negocios que viven de citas: deja de agendar por DM.' },
+      { key: 'servicios.svc2.img', label: 'Identidad y branding · Imagen', type: 'image', default: '' },
+      { key: 'servicios.svc2.title', label: 'Identidad y branding · Título', type: 'text', default: 'Identidad y branding' },
+      { key: 'servicios.svc2.text', label: 'Identidad y branding · Texto', type: 'textarea', default: 'La base de todo: quién eres y cómo te ves.' },
+      { key: 'servicios.svc3.img', label: 'Diseño para redes · Imagen', type: 'image', default: '' },
+      { key: 'servicios.svc3.title', label: 'Diseño para redes · Título', type: 'text', default: 'Diseño para redes sociales' },
+      { key: 'servicios.svc3.text', label: 'Diseño para redes · Texto', type: 'textarea', default: 'Contenido que se entiende en 3 segundos.' },
+      { key: 'servicios.svc4.img', label: 'Presencia digital · Imagen', type: 'image', default: '' },
+      { key: 'servicios.svc4.title', label: 'Presencia digital · Título', type: 'text', default: 'Presencia digital' },
+      { key: 'servicios.svc4.text', label: 'Presencia digital · Texto', type: 'textarea', default: 'Tu marca, lista para convertir en línea.' },
+      { key: 'servicios.svc5.img', label: 'Gestión de redes · Imagen', type: 'image', default: '' },
+      { key: 'servicios.svc5.title', label: 'Gestión de redes · Título', type: 'text', default: 'Gestión de redes' },
+      { key: 'servicios.svc5.text', label: 'Gestión de redes · Texto', type: 'textarea', default: 'Constancia sin que tengas que pensarla tú.' },
+    ],
+  },
+  {
     group: 'Servicios · Portada',
     fields: [
       { key: 'servicios.hero.kicker', label: 'Etiqueta', type: 'text', default: 'Servicios' },
