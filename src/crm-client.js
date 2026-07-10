@@ -1,7 +1,7 @@
-// Cliente mínimo para la API pública del CRM de WhatsApp (whatsapp.creatingbara.com/api/v1).
+// Cliente mínimo para la API pública del CRM de WhatsApp (crm.creatingbara.com/api/v1).
 // Usa una API key con scopes contacts:write + messages:send (Worker secret WACRM_API_KEY).
 
-const CRM_BASE = 'https://whatsapp.creatingbara.com/api/v1';
+const CRM_BASE = 'https://crm.creatingbara.com/api/v1';
 
 async function crmFetch(env, path, options = {}) {
   if (!env.WACRM_API_KEY) return { ok: false, error: 'CRM no configurado (falta WACRM_API_KEY).' };
