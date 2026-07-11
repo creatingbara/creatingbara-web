@@ -17,6 +17,8 @@ import { renderArticle, renderIndex } from './blog-view.js';
 import { upsertCrmContact, sendCrmTemplateMessage } from './crm-client.js';
 
 const DEMO_HOURS = ['9:00 AM', '10:30 AM', '1:00 PM', '2:30 PM', '4:00 PM', '5:30 PM'];
+const DEMO_STAFF = ['Camila', 'Estefany'];
+const DEMO_SERVICES = ['manicure-spa', 'unas-acrilicas', 'pedicure-completo'];
 const DEMO_CONFIRM_TEMPLATE = 'demo_agenda_confirmacion';
 const DEMO_REMINDER_TEMPLATE = 'demo_agenda_recordatorio';
 
@@ -351,11 +353,15 @@ async function handleDemoBook(request, env, url) {
   try { body = await request.json(); } catch { return json({ ok: false, error: 'Solicitud inválida.' }, 400); }
   const date = String(body.date || '');
   const timeLabel = String(body.time || '');
+  const staff = String(body.staff || '');
+  const service = String(body.service || '');
   const name = String(body.name || '').trim().slice(0, 60);
   const phone = String(body.phone || '').trim();
 
   if (!isValidDateStr(date)) return json({ ok: false, error: 'Fecha inválida.' }, 400);
   if (!DEMO_HOURS.includes(timeLabel)) return json({ ok: false, error: 'Horario inválido.' }, 400);
+  if (!DEMO_STAFF.includes(staff)) return json({ ok: false, error: 'Colaboradora inválida.' }, 400);
+  if (!DEMO_SERVICES.includes(service)) return json({ ok: false, error: 'Servicio inválido.' }, 400);
   if (!name) return json({ ok: false, error: 'Falta el nombre.' }, 400);
   if (!/^\+[1-9]\d{7,14}$/.test(phone)) return json({ ok: false, error: 'Número de WhatsApp inválido. Usa formato +18095551234.' }, 400);
 
@@ -363,11 +369,12 @@ async function handleDemoBook(request, env, url) {
   if (!startsAt) return json({ ok: false, error: 'Fecha/horario inválido.' }, 400);
   const nowTs = Math.floor(Date.now() / 1000);
   if (startsAt < nowTs + 3600) return json({ ok: false, error: 'Elige un horario con al menos 1 hora de anticipación.' }, 400);
+  if (startsAt > nowTs + 90 * 86400) return json({ ok: false, error: 'Solo se puede reservar hasta 90 días adelante.' }, 400);
   const dow = new Date(startsAt * 1000).getUTCDay();
   if (dow === 0) return json({ ok: false, error: 'No hay citas los domingos.' }, 400);
 
-  const { id, conflict } = await createBooking(env.DB, { booking_date: date, time_label: timeLabel, starts_at: startsAt, name, phone });
-  if (conflict) return json({ ok: false, error: 'Ese horario ya se reservó. Elige otro.' }, 409);
+  const { id, conflict } = await createBooking(env.DB, { booking_date: date, time_label: timeLabel, staff, service, starts_at: startsAt, name, phone });
+  if (conflict) return json({ ok: false, error: 'Ese horario ya se reservó con esa colaboradora. Elige otro.' }, 409);
 
   // Confirmación real por WhatsApp (best-effort: si la plantilla aún no está aprobada
   // por Meta, la reserva sigue siendo válida — solo no se envía el mensaje todavía).

@@ -76,17 +76,17 @@ export async function upsertPost(db, p) {
 // ---------- reservas de la demo "Web + Agenda 24/7" ----------
 export async function getBookedSlots(db, date) {
   const { results } = await db.prepare(
-    `SELECT time_label FROM demo_bookings WHERE booking_date = ? AND status = 'confirmed'`
+    `SELECT time_label, staff FROM demo_bookings WHERE booking_date = ? AND status = 'confirmed'`
   ).bind(date).all();
-  return results.map(r => r.time_label);
+  return results.map(r => ({ time: r.time_label, staff: r.staff }));
 }
 
 export async function createBooking(db, b) {
   try {
     const r = await db.prepare(
-      `INSERT INTO demo_bookings (booking_date, time_label, starts_at, name, phone)
-       VALUES (?, ?, ?, ?, ?)`
-    ).bind(b.booking_date, b.time_label, b.starts_at, b.name, b.phone).run();
+      `INSERT INTO demo_bookings (booking_date, time_label, staff, service, starts_at, name, phone)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(b.booking_date, b.time_label, b.staff, b.service, b.starts_at, b.name, b.phone).run();
     return { id: r.meta.last_row_id, conflict: false };
   } catch (err) {
     if (String(err.message || err).includes('UNIQUE')) return { id: null, conflict: true };

@@ -46,10 +46,14 @@ CREATE TABLE IF NOT EXISTS admin_user (
 );
 
 -- Reservas reales de la demo "Web + Agenda 24/7" (demoagenda.creatingbara.com).
+-- Cada reserva pertenece a una colaboradora: el mismo horario puede reservarse
+-- con colaboradoras distintas, pero no dos veces con la misma.
 CREATE TABLE IF NOT EXISTS demo_bookings (
   id               INTEGER PRIMARY KEY AUTOINCREMENT,
   booking_date     TEXT NOT NULL,   -- 'YYYY-MM-DD'
   time_label       TEXT NOT NULL,   -- '9:00 AM', etc. (coincide con el slot mostrado)
+  staff            TEXT NOT NULL DEFAULT '',  -- colaboradora asignada
+  service          TEXT NOT NULL DEFAULT '',  -- servicio elegido (slug)
   starts_at        INTEGER NOT NULL, -- epoch seconds del inicio de la cita, para el recordatorio
   name             TEXT NOT NULL,
   phone             TEXT NOT NULL,  -- E.164, ej. +18095551234
@@ -58,7 +62,7 @@ CREATE TABLE IF NOT EXISTS demo_bookings (
   confirmation_sent INTEGER NOT NULL DEFAULT 0,
   reminder_sent    INTEGER NOT NULL DEFAULT 0,
   created_at       INTEGER NOT NULL DEFAULT (unixepoch()),
-  UNIQUE (booking_date, time_label)
+  UNIQUE (booking_date, time_label, staff)
 );
 CREATE INDEX IF NOT EXISTS idx_demo_bookings_starts_at ON demo_bookings (starts_at);
 
